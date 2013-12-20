@@ -15,22 +15,21 @@
 
 package com.jayway.jaxrs.hateoas.support;
 
-import com.google.common.base.Function;
-import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
-import com.jayway.jaxrs.hateoas.HateoasInjectException;
-import com.jayway.jaxrs.hateoas.HateoasLinkInjector;
-import com.jayway.jaxrs.hateoas.HateoasVerbosity;
-import com.jayway.jaxrs.hateoas.LinkProducer;
-import org.apache.commons.lang.StringUtils;
-
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+
+import com.google.common.base.Function;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableList;
+import com.jayway.jaxrs.hateoas.HateoasInjectException;
+import com.jayway.jaxrs.hateoas.HateoasLinkInjector;
+import com.jayway.jaxrs.hateoas.HateoasVerbosity;
+import com.jayway.jaxrs.hateoas.LinkProducer;
+
+import org.apache.commons.lang.StringUtils;
 
 /**
  * @author Mattias Hellborg Arthursson
@@ -97,7 +96,7 @@ public class FieldPath implements Iterable<String> {
         }
 
         String currentFieldName = pathIterator.next();
-        Field currentField = ReflectionUtils.getField(currentTarget, currentFieldName);
+		Field currentField = ReflectionUtils.getFieldHierarchical(currentTarget.getClass(), currentFieldName);
 
         Object nextTarget = currentField.get(currentTarget);
         Object nextResult = null;
@@ -120,7 +119,7 @@ public class FieldPath implements Iterable<String> {
         //ReflectionUtils.setFieldAccessible(currentField);
 
 
-        ReflectionUtils.setField(currentTarget, currentField.getName(), nextResult);
+		ReflectionUtils.setFieldHierarchical(currentTarget, currentField.getName(), nextResult);
 
 
         return currentTarget;
