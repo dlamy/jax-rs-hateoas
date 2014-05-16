@@ -28,20 +28,20 @@
 		<spring.version>3.0.6.RELEASE</spring.version>
 	</properties>
 
+	<scm>
+		<connection>scm:git:git@github.com:levelsbeyond/jax-rs-hateoas.git</connection>
+		<developerConnection>scm:git:git@github.com:levelsbeyond/jax-rs-hateoas.git</developerConnection>
+		<url>https://github.com/levelsbeyond/jax-rs-hateoas</url>
+	</scm>
+
 	<distributionManagement>
 		<repository>
-			<uniqueVersion>false</uniqueVersion>
 			<id>LB-Releases</id>
-			<name>Levels Beyond Releases</name>
-			<url>http://dev.levelsbeyond.com:8080/nexus/content/repositories/releases</url>
-			<layout>default</layout>
+			<url>http://levelsbeyond.artifactoryonline.com/levelsbeyond/libs-releases-local</url>
 		</repository>
 		<snapshotRepository>
-			<uniqueVersion>true</uniqueVersion>
 			<id>LB-Snapshots</id>
-			<name>Levels Beyond Snapshots</name>
-			<url>http://dev.levelsbeyond.com:8080/nexus/content/repositories/snapshots</url>
-			<layout>default</layout>
+			<url>http://levelsbeyond.artifactoryonline.com/levelsbeyond/libs-snapshots-local</url>
 		</snapshotRepository>
 	</distributionManagement>
 
