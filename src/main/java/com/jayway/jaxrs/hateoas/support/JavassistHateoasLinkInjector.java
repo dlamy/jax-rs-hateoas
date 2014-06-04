@@ -29,16 +29,16 @@ import com.jayway.jaxrs.hateoas.HateoasInjectException;
 import com.jayway.jaxrs.hateoas.HateoasLinkInjector;
 import com.jayway.jaxrs.hateoas.HateoasVerbosity;
 import com.jayway.jaxrs.hateoas.LinkProducer;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import javassist.CannotCompileException;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtConstructor;
 import javassist.CtField;
 import javassist.CtMethod;
 import javassist.LoaderClassPath;
+import javassist.NotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link HateoasLinkInjector} implementation that uses javassist to dynamically add a field in the target entities
@@ -60,7 +60,15 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
                 JavassistHateoasLinkInjector.class.getClassLoader()));
     }
 
-    private HateoasLinkInjector<Object> injector = new HateoasLinkBeanLinkInjector();
+    private HateoasLinkInjector<Object> arrayInjector = new HateoasLinkBeanLinkInjector();
+
+    private final boolean mapStructureEnabled;
+    private HateoasLinkInjector<Object> mapInjector;
+
+    public JavassistHateoasLinkInjector(boolean mapStructureEnabled) {
+        this.mapStructureEnabled = mapStructureEnabled;
+        mapInjector = new HateoasLinkMapBeanLinkInjector();
+    }
 
     @Override
     public boolean canInject(Object entity) {
@@ -74,7 +82,6 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
         if (entity == null) {
             return null;
         }
-
 
         String newClassName = entity.getClass().getPackage().getName() + "." + entity.getClass().getSimpleName() + "_generated";
 
@@ -124,17 +131,12 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
                     ctConstructor.setBody(constructorBody.toString());
                     newClass.addConstructor(ctConstructor);
 
-                    CtField newField = CtField.make("public java.util.Collection links;", newClass);
-                    newClass.addField(newField);
-
-                    CtMethod linksGetterMethod = CtMethod.make("public java.util.Collection getLinks(){ return this.links; }", newClass);
-                    newClass.addMethod(linksGetterMethod);
-
-                    CtMethod linksSetterMethod = CtMethod.make("public void setLinks(java.util.Collection links){ this.links = links; }", newClass);
-                    newClass.addMethod(linksSetterMethod);
-
-                    newClass.addInterface(CLASS_POOL.get("com.jayway.jaxrs.hateoas.HateoasLinkBean"));
-
+                    if (mapStructureEnabled) {
+                        addMapMembers(newClass);
+                    }
+                    else {
+                        addCollectionMembers(newClass);
+                    }
 
                     StringBuilder cloneMethodBody = new StringBuilder();
 
@@ -153,14 +155,16 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
                     clazz = newClass.toClass(classLoader, entity.getClass().getProtectionDomain());
 
                     TRANSFORMED_CLASSES.put(newClassName, clazz);
-                } catch (Exception e) {
-                    if(e instanceof HateoasInjectException){
-                        throw (HateoasInjectException)e;
+                }
+                catch (Exception e) {
+                    if (e instanceof HateoasInjectException) {
+                        throw (HateoasInjectException) e;
                     }
                     throw new RuntimeException(e);
                 }
             }
-        } else {
+        }
+        else {
             clazz = TRANSFORMED_CLASSES.get(newClassName);
         }
 
@@ -173,6 +177,38 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
 	        throw new HateoasInjectException("could not create instance of " + clazz.getName(), e);
         }
 
-        return injector.injectLinks(newInstance, linkProducer, verbosity);
+        if (mapStructureEnabled) {
+            return mapInjector.injectLinks(newInstance, linkProducer, verbosity);
+        }
+        else {
+            return arrayInjector.injectLinks(newInstance, linkProducer, verbosity);
+        }
     }
+
+    private void addCollectionMembers(CtClass newClass) throws CannotCompileException, NotFoundException {
+        CtField newField = CtField.make("public java.util.Collection links;", newClass);
+        newClass.addField(newField);
+
+        CtMethod linksGetterMethod = CtMethod.make("public java.util.Collection getLinks(){ return this.links; }", newClass);
+        newClass.addMethod(linksGetterMethod);
+
+        CtMethod linksSetterMethod = CtMethod.make("public void setLinks(java.util.Collection links){ this.links = links; }", newClass);
+        newClass.addMethod(linksSetterMethod);
+
+        newClass.addInterface(CLASS_POOL.get("com.jayway.jaxrs.hateoas.HateoasLinkBean"));
+    }
+
+    private void addMapMembers(CtClass newClass) throws CannotCompileException, NotFoundException {
+        CtField newField = CtField.make("public java.util.Map links;", newClass);
+        newClass.addField(newField);
+
+        CtMethod linksGetterMethod = CtMethod.make("public java.util.Map getLinks(){ return this.links; }", newClass);
+        newClass.addMethod(linksGetterMethod);
+
+        CtMethod linksSetterMethod = CtMethod.make("public void setLinks(java.util.Map links){ this.links = links; }", newClass);
+        newClass.addMethod(linksSetterMethod);
+
+        newClass.addInterface(CLASS_POOL.get("com.jayway.jaxrs.hateoas.HateoasLinkMapBean"));
+    }
+
 }

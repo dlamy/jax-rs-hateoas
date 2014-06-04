@@ -25,6 +25,7 @@ import java.util.Map;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.jayway.jaxrs.hateoas.HateoasInjectException;
 import com.jayway.jaxrs.hateoas.HateoasLink;
 import com.jayway.jaxrs.hateoas.HateoasVerbosity;
 import com.jayway.jaxrs.hateoas.core.HateoasResponseBuilderImpl.FixedLinkProducer;
@@ -37,18 +38,30 @@ import org.junit.Test;
  * @author Kalle Stenflo
  */
 public class JavassistHateoasLinkInjectorTest {
-	private final static Map<String, Object> EXPECTED_MAP = new HashMap<String, Object>();
-	private HateoasLink linkMock;
-	private JavassistHateoasLinkInjector tested;
-	private FixedLinkProducer linkProducer;
+    private final static Map<String, Object> EXPECTED_MAP = new HashMap<String, Object>();
+    private static Map<String, Object> REL_MAP = new HashMap<>();
 
-	@Before
-	public void prepareTestedInstance() {
-		tested = new JavassistHateoasLinkInjector();
-		linkMock = mock(HateoasLink.class);
-		linkProducer = new FixedLinkProducer(linkMock);
-		when(linkMock.toMap(HateoasVerbosity.MINIMUM)).thenReturn(EXPECTED_MAP);
-	}
+    private HateoasLink linkMock;
+    private HateoasLink linkMapMock;
+    private JavassistHateoasLinkInjector arrayTested;
+    private JavassistHateoasLinkInjector mapTested;
+    private FixedLinkProducer arrayLinkProducer;
+    private FixedLinkProducer mapLinkProducer;
+
+    @Before
+    public void prepareTestedInstance() {
+        REL_MAP.put("rel", "test");
+        REL_MAP.put("href", "href_value");
+        arrayTested = new JavassistHateoasLinkInjector(false);
+        mapTested = new JavassistHateoasLinkInjector(true);
+        linkMock = mock(HateoasLink.class);
+        linkMapMock = mock(HateoasLink.class);
+        arrayLinkProducer = new FixedLinkProducer(linkMock);
+        mapLinkProducer = new FixedLinkProducer(linkMapMock);
+
+        when(linkMock.toMap(HateoasVerbosity.MINIMUM)).thenReturn(EXPECTED_MAP);
+        when(linkMapMock.toMap(HateoasVerbosity.MINIMUM)).thenReturn(REL_MAP);
+    }
 
 	@SuppressWarnings("unchecked")
 	@Test
@@ -56,8 +69,8 @@ public class JavassistHateoasLinkInjectorTest {
 		DummyEntity dummyEntity = new DummyEntity();
 		dummyEntity.setId("someId");
 
-		DummyEntity returnedEntity = (DummyEntity) tested.injectLinks(
-				dummyEntity, linkProducer, HateoasVerbosity.MINIMUM);
+        DummyEntity returnedEntity = (DummyEntity) arrayTested.injectLinks(
+                dummyEntity, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dummyEntity, returnedEntity);
 		assertEquals("someId", returnedEntity.getId());
@@ -72,7 +85,7 @@ public class JavassistHateoasLinkInjectorTest {
 	public void linksFieldIsInjectedAutomaticallyInSublass() {
 		DummySubClass dummyEntity = new DummySubClass("someId", 1L);
 
-		DummySubClass returnedEntity = (DummySubClass) tested.injectLinks(dummyEntity, linkProducer, HateoasVerbosity.MINIMUM);
+		DummySubClass returnedEntity = (DummySubClass) arrayTested.injectLinks(dummyEntity, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dummyEntity, returnedEntity);
 		assertEquals("someId", returnedEntity.getId());
@@ -83,12 +96,54 @@ public class JavassistHateoasLinkInjectorTest {
 		assertSame(EXPECTED_MAP, Iterables.getOnlyElement(links));
 	}
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void linksMapFieldIsInjectedAutomatically() {
+        DummyMapEntity dummyEntity = new DummyMapEntity();
+        dummyEntity.setId("someId");
+
+        DummyMapEntity returnedEntity = (DummyMapEntity) mapTested.injectLinks(
+                dummyEntity, mapLinkProducer, HateoasVerbosity.MINIMUM);
+
+        assertNotSame(dummyEntity, returnedEntity);
+        assertEquals("someId", returnedEntity.getId());
+
+        Map<String, Map<String, Object>> links = (Map<String, Map<String, Object>>) ReflectionUtils
+                .getFieldValue(returnedEntity, "links");
+
+        assertTrue(links.size() == 1);
+        assertEquals(links.keySet().iterator().next(), "test");
+        assertEquals(links.values().iterator().next().size(), 1);
+        assertEquals(links.values().iterator().next().keySet().iterator().next(), "href");
+        assertEquals(links.values().iterator().next().values().iterator().next(), "href_value");
+    }
+
+	@SuppressWarnings("unchecked")
+	@Test
+	public void linksMapFieldIsInjectedAutomaticallyInSublass() {
+		DummyMapSubClass dummyEntity = new DummyMapSubClass("someId", 1L);
+
+		DummyMapSubClass returnedEntity = (DummyMapSubClass) mapTested.injectLinks(dummyEntity, mapLinkProducer, HateoasVerbosity.MINIMUM);
+
+		assertNotSame(dummyEntity, returnedEntity);
+		assertEquals("someId", returnedEntity.getId());
+		assertEquals(1L, returnedEntity.getTime());
+
+		Map<String, Map<String, Object>> links = (Map<String, Map<String, Object>>) ReflectionUtils
+				.getFieldValue(returnedEntity, "links");
+		assertTrue(links.size() == 1);
+		assertEquals(links.keySet().iterator().next(), "test");
+		assertEquals(links.values().iterator().next().size(), 1);
+		assertEquals(links.values().iterator().next().keySet().iterator().next(), "href");
+		assertEquals(links.values().iterator().next().values().iterator().next(), "href_value");
+	}
+
 	@SuppressWarnings("unchecked")
 	@Test
 	public void immutableDTOWithPublicConstructor() {
 		ImmutablePublicDTO dto = new ImmutablePublicDTO(10L, "bar", true);
 
-		ImmutablePublicDTO returnedEntity = (ImmutablePublicDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
+		ImmutablePublicDTO returnedEntity = (ImmutablePublicDTO) arrayTested.injectLinks(dto, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dto, returnedEntity);
 		assertEquals(10L, returnedEntity.getFoo());
@@ -104,7 +159,7 @@ public class JavassistHateoasLinkInjectorTest {
 	public void immutableDTOWithProtectedConstructor() {
 		ImmutableProtectedDTO dto = new ImmutableProtectedDTO(10L, "bar", true);
 
-		ImmutableProtectedDTO returnedEntity = (ImmutableProtectedDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
+		ImmutableProtectedDTO returnedEntity = (ImmutableProtectedDTO) arrayTested.injectLinks(dto, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dto, returnedEntity);
 		assertEquals(10L, returnedEntity.getFoo());
@@ -123,7 +178,7 @@ public class JavassistHateoasLinkInjectorTest {
 		dto.bar = "bar";
 		dto.baz = true;
 
-		ImmutablePublicNoArgDTO returnedEntity = (ImmutablePublicNoArgDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
+		ImmutablePublicNoArgDTO returnedEntity = (ImmutablePublicNoArgDTO) arrayTested.injectLinks(dto, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dto, returnedEntity);
 		assertEquals(10L, returnedEntity.foo);
@@ -141,7 +196,7 @@ public class JavassistHateoasLinkInjectorTest {
 		MutableWithNoArgDefinedDTO dto = new MutableWithNoArgDefinedDTO();
 		dto.rows = ImmutableList.of("foo", "bar", "baz");
 
-		MutableWithNoArgDefinedDTO returnedEntity = (MutableWithNoArgDefinedDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
+		MutableWithNoArgDefinedDTO returnedEntity = (MutableWithNoArgDefinedDTO) arrayTested.injectLinks(dto, arrayLinkProducer, HateoasVerbosity.MINIMUM);
 
 		assertNotSame(dto, returnedEntity);
 
@@ -154,7 +209,7 @@ public class JavassistHateoasLinkInjectorTest {
 	@Test
 	public void immutableDTOWithPrivateConstructor() {
 		try {
-			tested.injectLinks(new ImmutablePrivateDTO(10L, "bar", true), linkProducer, HateoasVerbosity.MINIMUM);
+			arrayTested.injectLinks(new ImmutablePrivateDTO(10L, "bar", true), arrayLinkProducer, HateoasVerbosity.MINIMUM);
 			fail("should have thrown exception because it's a private exception");
 		} catch (Exception e) {
 			// no-op
@@ -165,7 +220,7 @@ public class JavassistHateoasLinkInjectorTest {
 	@Test
 	public void immutableDTOWithPackageConstructor() {
 		try {
-			tested.injectLinks(new ImmutablePackageDTO(10L, "bar", true), linkProducer, HateoasVerbosity.MINIMUM);
+			arrayTested.injectLinks(new ImmutablePackageDTO(10L, "bar", true), arrayLinkProducer, HateoasVerbosity.MINIMUM);
 			fail("should have thrown exception because it's a private exception");
 		} catch (Exception e) {
 			// no-op
@@ -176,7 +231,7 @@ public class JavassistHateoasLinkInjectorTest {
 	@Test
 	public void npeInConstructor() {
 		try {
-			tested.injectLinks(new MutableWithNoArgDefinedNPEDTO(), linkProducer, HateoasVerbosity.MINIMUM);
+			arrayTested.injectLinks(new MutableWithNoArgDefinedNPEDTO(), arrayLinkProducer, HateoasVerbosity.MINIMUM);
 			fail("should have thrown a NPE because null gets passed into the constructor");
 		} catch (Exception e) {
 			System.out.println();
@@ -219,6 +274,26 @@ public class JavassistHateoasLinkInjectorTest {
 		}
 	}
 
+	public static class DummyMapEntity {
+        private String id;
+
+        public DummyMapEntity() {
+        }
+
+        public DummyMapEntity(String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+    }
+
+
 	public static class DummySubClass extends DummyEntity {
 
 		private long time;
@@ -227,6 +302,23 @@ public class JavassistHateoasLinkInjectorTest {
 		}
 
 		public DummySubClass(String id, long time) {
+			super(id);
+			this.time = time;
+		}
+
+		public long getTime() {
+			return time;
+		}
+	}
+
+	public static class DummyMapSubClass extends DummyMapEntity {
+
+		private long time;
+
+		public DummyMapSubClass() {
+		}
+
+		public DummyMapSubClass(String id, long time) {
 			super(id);
 			this.time = time;
 		}

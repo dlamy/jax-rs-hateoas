@@ -1,13 +1,69 @@
+## Intro
 JAX-RS-HATEOAS is a small extension to JAX-RS to enable hypermedia in JAX-RS 1.x applications.
 
 Adding hypermedia to your existing application is easily done in four steps:
+
 * Extend HateoasApplication (or JerseyHateoasApplication)
 * Add @Linkable annotations to all methods that should be linkable.
-* Use HateoasResponse instead for building responses with HATEOAS links.
-  The normal Response methods (ok, created, entity, etc.) will now return a HateoasResponseBuilder.
-  The HateoasResponseBuilder contains methods to easily add links to your responses:
-** link(String linkId, String rel, Object... params) - adds a link to the referenced linkId
-   (as defined by an @Linkable annotation).
-** selfLink(String linkId, Object... params) - adds a link to the referenced linkId with a 'self' rel
+* Use HateoasResponse instead for building responses with HATEOAS links.  The normal Response methods (ok, created, entity, etc.) will now return a HateoasResponseBuilder.
+* Use the HateoasResponseBuilder contains methods to easily add links to your responses:
+	* link(String linkId, String rel, Object... params) - adds a link to the referenced linkId (as defined by an @Linkable annotation).
+	* selfLink(String linkId, Object... params) - adds a link to the referenced linkId with a 'self' rel
    (rather than the default rel defined in the referenced @Linkable annotation
-** ...etc
+	* ...etc
+	
+## Configuring Link Structure
+
+Beginning in 0.5.0, you can specify the link structure type while creating your HateoasApplication.  
+
+### Rationale
+
+By default, links are formatted as a JSON array:
+
+        {
+          "links":
+            [
+              {
+                 "rel": "relName",
+                 "href": "/path/to/resource",
+                 "method": "GET"
+              },
+              {
+                 "rel": "otherRel",
+                 "href": "/path/to/other/resource",
+                 "method": "GET"
+              }
+            ]
+        }
+
+The array structure requires the client to iterate over the links in order to find the desired rel, which has performance and general PIA implications.
+
+0.5.0 adds the ability to specify a map-based link structure instead.  Map structures look like this:
+
+        {
+          "links":
+            {
+              "relName": 
+                {
+                  "href": "/path/to/resource",
+                  "method": "GET"
+                },
+              "otherRel": 
+                {
+                  "href": "/path/to/other/resource",
+                  "method": "GET"
+                }
+            }
+        }
+
+By making the rel name the map key, clients can much more easily and quickly obtain desired rels from the set.
+
+
+### Configuration
+A new property has been added to `HateoasConfigurationFactory` that allows you enable a Map-based link structure instead of the standard Array-based structure.  Specify this property value as "true" during HateoasApplication construction to enable:
+
+	ImmutableMap.<String, Object>builder()
+		...
+		.put(HateoasConfigurationFactory.PROPERTY_HATEOAS_MAP_STRUCTURE_ENABLED, "true")
+		.build()
+
