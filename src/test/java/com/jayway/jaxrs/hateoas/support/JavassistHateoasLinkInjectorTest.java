@@ -17,10 +17,13 @@ package com.jayway.jaxrs.hateoas.support;
 import static junit.framework.Assert.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.jayway.jaxrs.hateoas.HateoasLink;
 import com.jayway.jaxrs.hateoas.HateoasVerbosity;
@@ -87,8 +90,6 @@ public class JavassistHateoasLinkInjectorTest {
 
 		ImmutablePublicDTO returnedEntity = (ImmutablePublicDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
 
-
-
 		assertNotSame(dto, returnedEntity);
 		assertEquals(10L, returnedEntity.getFoo());
 		assertEquals("bar", returnedEntity.getBar());
@@ -136,6 +137,21 @@ public class JavassistHateoasLinkInjectorTest {
 
 	@SuppressWarnings("unchecked")
 	@Test
+	public void mutablePublicNoArgConstructorDefined() {
+		MutableWithNoArgDefinedDTO dto = new MutableWithNoArgDefinedDTO();
+		dto.rows = ImmutableList.of("foo", "bar", "baz");
+
+		MutableWithNoArgDefinedDTO returnedEntity = (MutableWithNoArgDefinedDTO) tested.injectLinks(dto, linkProducer, HateoasVerbosity.MINIMUM);
+
+		assertNotSame(dto, returnedEntity);
+
+		Collection<Map<String, Object>> links = (Collection<Map<String, Object>>) ReflectionUtils
+				.getFieldValue(returnedEntity, "links");
+		assertSame(EXPECTED_MAP, Iterables.getOnlyElement(links));
+	}
+
+	@SuppressWarnings("unchecked")
+	@Test
 	public void immutableDTOWithPrivateConstructor() {
 		try {
 			tested.injectLinks(new ImmutablePrivateDTO(10L, "bar", true), linkProducer, HateoasVerbosity.MINIMUM);
@@ -152,6 +168,18 @@ public class JavassistHateoasLinkInjectorTest {
 			tested.injectLinks(new ImmutablePackageDTO(10L, "bar", true), linkProducer, HateoasVerbosity.MINIMUM);
 			fail("should have thrown exception because it's a private exception");
 		} catch (Exception e) {
+			// no-op
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	@Test
+	public void npeInConstructor() {
+		try {
+			tested.injectLinks(new MutableWithNoArgDefinedNPEDTO(), linkProducer, HateoasVerbosity.MINIMUM);
+			fail("should have thrown a NPE because null gets passed into the constructor");
+		} catch (Exception e) {
+			System.out.println();
 			// no-op
 		}
 	}
@@ -294,5 +322,24 @@ public class JavassistHateoasLinkInjectorTest {
 		private boolean baz;
 	}
 
+	public class MutableWithNoArgDefinedDTO {
+		public Collection<String> rows;
+
+		public MutableWithNoArgDefinedDTO() {}
+		public MutableWithNoArgDefinedDTO(List<String> rows) {
+			if (rows != null) {
+				this.rows = new ArrayList<>(rows);
+			}
+		}
+	}
+
+	public class MutableWithNoArgDefinedNPEDTO {
+		public Collection<String> rows;
+
+		public MutableWithNoArgDefinedNPEDTO() {}
+		public MutableWithNoArgDefinedNPEDTO(List<String> rows) {
+			this.rows = new ArrayList<>(rows);
+		}
+	}
 
 }

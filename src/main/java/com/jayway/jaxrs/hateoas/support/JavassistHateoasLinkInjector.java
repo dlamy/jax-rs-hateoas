@@ -113,9 +113,8 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
 							} else {
 								constructorBody.append("(").append(paramType.getName()).append(")").append("0");
 							}
-
 						} else {
-							constructorBody.append("(").append(paramType.getName()).append(")").append("null");
+							constructorBody.append("null");
 						}
 						if (i < paramTypes.size() - 1) {
 							constructorBody.append(", ");
@@ -171,7 +170,7 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
             Method copyMethod = newInstance.getClass().getMethod("hateoasCopy", entity.getClass());
             copyMethod.invoke(newInstance, entity);
         } catch (Throwable e) {
-	        throw new HateoasInjectException("could not create instance of " + clazz.getName());
+	        throw new HateoasInjectException("could not create instance of " + clazz.getName(), e);
         }
 
         return injector.injectLinks(newInstance, linkProducer, verbosity);

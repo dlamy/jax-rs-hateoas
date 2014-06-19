@@ -24,7 +24,11 @@ public class HateoasInjectException extends RuntimeException {
 
 	private static final long serialVersionUID = -7586666921228435121L;
 
-    public HateoasInjectException(String message) {
+	public HateoasInjectException(String message, Throwable cause) {
+		super(message, cause);
+	}
+
+	public HateoasInjectException(String message) {
         super(message);
     }
 
