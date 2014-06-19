@@ -14,21 +14,31 @@
  */
 package com.jayway.jaxrs.hateoas.support;
 
-import com.jayway.jaxrs.hateoas.HateoasInjectException;
-import com.jayway.jaxrs.hateoas.HateoasLinkInjector;
-import com.jayway.jaxrs.hateoas.HateoasVerbosity;
-import com.jayway.jaxrs.hateoas.LinkProducer;
-import javassist.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import com.jayway.jaxrs.hateoas.HateoasInjectException;
+import com.jayway.jaxrs.hateoas.HateoasLinkInjector;
+import com.jayway.jaxrs.hateoas.HateoasVerbosity;
+import com.jayway.jaxrs.hateoas.LinkProducer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtConstructor;
+import javassist.CtField;
+import javassist.CtMethod;
+import javassist.LoaderClassPath;
 
 /**
  * {@link HateoasLinkInjector} implementation that uses javassist to dynamically add a field in the target entities
@@ -74,21 +84,45 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
                 try {
                     log.debug("Creating HATEOAS subclass for DTO : {}", entity.getClass());
 
-                    boolean valid = false;
-                    for (Constructor<?> c : entity.getClass().getConstructors()) {
-                        if (c.getParameterTypes().length == 0) {
-                            valid = true;
-                            break;
-                        }
-                    }
-                    if (!valid){
-                        throw new HateoasInjectException("DTO's must have no arg constructor. Check " + entity.getClass().getName());
-                    }
+	                // find the largest constructor
+	                Constructor<?> largestConstructor = null;
+	                for (Constructor<?> thisConstructor : entity.getClass().getDeclaredConstructors()) {
+		                largestConstructor = largestConstructor == null ? thisConstructor : 
+				                thisConstructor.getParameterTypes().length > largestConstructor.getParameterTypes().length ? thisConstructor : largestConstructor;
+	                }
 
+	                if (largestConstructor == null) {
+		                throw new IllegalStateException("Unable to locate any valid constructors");
+	                }
+
+	                // save off the param types for the largest constructor
+	                List<Class<?>> paramTypes = new ArrayList<>();
+	                Collections.addAll(paramTypes, largestConstructor.getParameterTypes());
+	                
                     CtClass newClass = CLASS_POOL.makeClass(newClassName);
                     newClass.setSuperclass(CLASS_POOL.get(entity.getClass().getName()));
                     CtConstructor ctConstructor = new CtConstructor(new CtClass[0], newClass);
-                    ctConstructor.setBody("super();");
+
+	                // iterate through all the param types and construct a super() call
+	                StringBuilder constructorBody = new StringBuilder("super(");
+					for (int i = 0; i < paramTypes.size(); i++) {
+						Class<?> paramType = paramTypes.get(i);
+						if (paramType.isPrimitive()) {
+							if (paramType.getName().equals("boolean")) {
+								constructorBody.append("false");
+							} else {
+								constructorBody.append("(").append(paramType.getName()).append(")").append("0");
+							}
+
+						} else {
+							constructorBody.append("(").append(paramType.getName()).append(")").append("null");
+						}
+						if (i < paramTypes.size() - 1) {
+							constructorBody.append(", ");
+						}
+					}
+	                constructorBody.append(");");
+                    ctConstructor.setBody(constructorBody.toString());
                     newClass.addConstructor(ctConstructor);
 
                     CtField newField = CtField.make("public java.util.Collection links;", newClass);
@@ -131,16 +165,15 @@ public class JavassistHateoasLinkInjector implements HateoasLinkInjector<Object>
             clazz = TRANSFORMED_CLASSES.get(newClassName);
         }
 
-        Object newInstance = null;
+        Object newInstance;
         try {
             newInstance = clazz.newInstance();
             Method copyMethod = newInstance.getClass().getMethod("hateoasCopy", entity.getClass());
             copyMethod.invoke(newInstance, entity);
-        } catch (Exception e) {
-            log.error("could not create instance of " + clazz.getName(), e);
+        } catch (Throwable e) {
+	        throw new HateoasInjectException("could not create instance of " + clazz.getName());
         }
 
         return injector.injectLinks(newInstance, linkProducer, verbosity);
     }
-
 }
